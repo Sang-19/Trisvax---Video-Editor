@@ -5,11 +5,15 @@ title Trisvax Video Editor - Docker Startup
 if not exist "logs" mkdir "logs"
 set "LOGFILE=%CD%\logs\start.log"
 set "TMPLOG=%TEMP%\trisvax-start-step.log"
-echo TRISVAX VIDEO EDITOR STARTUP %DATE% %TIME% > "%LOGFILE%"
+set "PASS_COUNT=0"
+set "WARN_COUNT=0"
+set "FAIL_COUNT=0"
+
 echo ============================================================
 echo   TRISVAX VIDEO EDITOR - STARTUP AND ENVIRONMENT CHECK
 echo ============================================================
 echo Log file: %LOGFILE%
+echo START %DATE% %TIME% > "%LOGFILE%"
 
 call :check "Docker CLI"
 where docker >nul 2>&1
@@ -164,7 +168,7 @@ echo ============================================================
 echo [SUCCESS] %PASS_COUNT%   [WARNING] %WARN_COUNT%   [FAILED] %FAIL_COUNT%
 echo [SUMMARY] SUCCESS=%PASS_COUNT% WARNING=%WARN_COUNT% FAILED=%FAIL_COUNT%>> "%LOGFILE%"
 echo Log: %LOGFILE%
-if defined FAIL_COUNT if not "%FAIL_COUNT%"=="0" (
+if not "%FAIL_COUNT%"=="0" (
   echo [FAILED] Startup did not complete. Fix failed steps and rerun start.bat.
   pause
   exit /b 1
