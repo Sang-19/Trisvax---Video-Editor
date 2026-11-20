@@ -117,6 +117,17 @@ if not "!STEP_RESULT!"=="0" (
 )
 call :pass "Docker container started"
 
+call :check "Install React Native dependencies and SDK patches"
+docker compose exec -T trisvax-video-editor bash -lc "corepack yarn install && corepack yarn setup:video-editor" > "%TMPLOG%" 2>&1
+set "STEP_RESULT=!ERRORLEVEL!"
+type "%TMPLOG%"
+type "%TMPLOG%" >> "%LOGFILE%"
+if not "!STEP_RESULT!"=="0" (
+  call :fail "React Native dependency or SDK patch setup failed."
+  goto :summary
+)
+call :pass "React Native dependencies and SDK patches are ready"
+
 call :check "Verify Node.js, Yarn and Java inside Docker"
 docker compose exec -T trisvax-video-editor bash -lc "node --version && corepack yarn --version && java -version" > "%TMPLOG%" 2>&1
 set "STEP_RESULT=!ERRORLEVEL!"
