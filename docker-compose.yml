@@ -9,7 +9,6 @@ services:
       - .:/workspace
       - node_modules:/workspace/node_modules
       - gradle_cache:/root/.gradle
-      - android_sdk:/opt/android-sdk
     ports:
       - "8081:8081"
     environment:
@@ -19,7 +18,7 @@ services:
     tty: true
     stdin_open: true
     command: sleep infinity
+
 volumes:
   node_modules:
   gradle_cache:
-  android_sdk
