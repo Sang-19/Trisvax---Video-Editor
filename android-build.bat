@@ -1,9 +1,27 @@
 @echo off
 cd /d "%~dp0"
-echo [INFO] Building APK inside Docker...
-docker compose exec trisvax-video-editor bash -lc "test -f package.json || { echo '[FAIL] package.json missing: app scaffold is not present yet.'; exit 2; }; test -d android || { echo '[FAIL] android directory missing.'; exit 2; }; corepack yarn install && cd android && (test -x gradlew || chmod +x gradlew) && ./gradlew assembleDebug --no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a"
+echo [CHECK] React Native app and Android project
+if not exist "package.json" (
+ echo [FAILED] package.json missing.
+ pause
+ exit /b 1
+)
+if not exist "android\app\build.gradle" (
+ echo [FAILED] Android app project missing.
+ pause
+ exit /b 1
+)
+echo [CHECK] Install JavaScript dependencies and apply SDK setup patches
+docker compose exec -T trisvax-video-editor bash -lc "corepack yarn install && corepack yarn setup:video-editor"
 if errorlevel 1 (
- echo [FAIL] APK build failed. Review Gradle output above.
+ echo [FAILED] Dependency or video editor SDK setup failed.
+ pause
+ exit /b 1
+)
+echo [CHECK] Build ARM64 debug APK inside Docker
+docker compose exec -T trisvax-video-editor bash -lc "cd android && gradle assembleDebug --no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a"
+if errorlevel 1 (
+ echo [FAILED] APK build failed. Review Gradle output above.
  pause
  exit /b 1
 )
