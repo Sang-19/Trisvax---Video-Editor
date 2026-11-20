@@ -1,70 +1,57 @@
 # Trisvax Video Editor
 
-Docker-first React Native Android video-editor workspace for a **physical Android phone**. No Android emulator is required.
+A native Android demo app built with React Native and the react-native-video-editor SDK. The app is designed for a physical Android phone; no emulator is required.
 
-## Current repository status
+## App experience
 
-This repository contains the Docker development environment and Windows startup/helper scripts. The React Native application scaffold and integration of the video editor SDK have not yet been added.
+1. Home: an aesthetic creator-studio landing screen.
+2. Choose media: the user chooses Video or Photo.
+3. System picker: Android opens its document/media picker for the selected type.
+4. Video editing: selected videos open the native editor with Trim, Crop, Background Music, Text Overlay and Voice-over enabled.
+5. Photo workspace: selected photos open a demo photo-editing workspace with a preview and tool selection.
 
-Planned SDK: https://github.com/zlucksolutions/react-native-video-editor
+Photo limitation: the connected SDK currently edits videos only. The photo workspace is a UI demo; photo adjustments, filters and export are not implemented yet.
 
-The SDK provides video trimming, cropping/aspect ratio, background music, text overlays and voice-over.
+## Permissions and privacy
 
-## Windows requirements
+The app uses Android's system document picker, so it does not request broad photo/video library access. Android grants access to the file the user selects. The SDK requests microphone access when voice-over is used. The manifest declares RECORD_AUDIO and the legacy write permission only through Android API 32 for SDK export compatibility.
 
-- Docker Desktop installed (the startup script attempts to launch it automatically).
-- Docker Compose v2 plugin.
-- Android SDK Platform-Tools (`adb`) on Windows PATH for physical-device deployment.
-- Physical Android phone with Developer Options and USB debugging enabled.
-- Accept the USB debugging authorization prompt on the phone.
+Media is selected locally on the device. The app does not upload it to a server.
 
-Android Studio and an Android emulator are not required.
+## Windows setup
 
-## Start the environment
+Requirements:
+- Docker Desktop and Docker Compose.
+- Windows Android Platform-Tools (adb) on PATH.
+- USB debugging enabled on the physical phone; accept the authorization prompt.
 
-Double-click **start.bat**.
+Double-click start.bat. It starts/checks Docker Desktop, builds the development image, starts the container and checks Node.js, Yarn, Java and Android SDK. Logs: logs/start.log.
 
-The batch file is the only startup entry point; it does not call Python or any other launcher. It:
+## Run the app
 
-1. Checks Docker CLI and Docker Compose.
-2. Starts Docker Desktop when the daemon is not running, then waits for it.
-3. Checks for an authorized physical Android phone (ADB/device absence is a warning, not a blocker for preparing Docker).
-4. Builds the Docker image and starts the development container.
-5. Verifies Node.js, Yarn, Java and the Android SDK inside Docker.
-6. Prints `[SUCCESS]`, `[WARNING]` or `[FAILED]` for each step and writes output to `logs/start.log`.
+1. Run start.bat and wait for the Docker environment to become ready.
+2. Connect and authorize your Android phone over USB.
+3. Run android-metro.bat in one terminal window.
+4. Run android-build.bat in another window. This installs dependencies, runs the SDK's peer-dependency/patch setup, and builds the ARM64 debug APK.
+5. Run android-install.bat to install the APK and configure adb reverse.
 
-## Android helper scripts
+APK output: android/app/build/outputs/apk/debug/app-debug.apk.
 
-After a React Native app scaffold exists:
+## Docker / USB architecture
 
-- `android-metro.bat` starts Metro inside Docker.
-- `android-build.bat` builds an ARM64 debug APK inside Docker.
-- `android-install.bat` uses Windows ADB to reverse port 8081 and install the APK on the connected phone.
+ADB runs on Windows as the USB bridge because Docker Desktop does not automatically expose a USB Android device to a Linux container. Node.js, Yarn, Metro, Java, Android SDK and Gradle run inside Docker.
 
-## USB / ADB architecture
+Useful commands:
+- adb devices
+- adb reverse tcp:8081 tcp:8081
 
-Docker Desktop on Windows does not automatically pass a USB Android device into a Linux container. For this setup, ADB runs on Windows as the USB bridge; Node.js, Yarn, Metro, Java, Android SDK and Gradle run inside Docker.
 
-Useful commands from Windows CMD:
+## SDK integration
 
-`adb devices`
+Package: @zlucksolutions/react-native-video-editor 1.0.3.
 
-`adb reverse tcp:8081 tcp:8081`
+VideoEditorHost is mounted once at the app root. Videos are passed to openVideoEditor with trim, crop, BGM, text overlay and voice-over enabled. The SDK's documented install command is run by android-build.bat through yarn setup:video-editor.
 
-## Planned SDK integration
+## Build note
 
-Once the React Native host app is scaffolded:
-
-1. Install `@zlucksolutions/react-native-video-editor`.
-2. Install its documented peer dependencies.
-3. Add `patch-package` postinstall support and apply the SDK's documented patch.
-4. Add Android microphone permission for voice-over.
-5. Mount `<VideoEditorHost />` once near the app root.
-6. Call `openVideoEditor` with the selected source and editing options.
-7. Pass the exported media URI to the preview/upload flow.
-
-Follow the SDK documentation for the complete integration: https://github.com/zlucksolutions/react-native-video-editor
-
-## Important
-
-A successful `start.bat` run confirms the Docker toolchain is ready. It does not mean the app itself can build yet: the React Native app scaffold and SDK dependencies must be added before running `android-build.bat`.
+The Docker image build downloads Android SDK components and Gradle 9.0.0, so the first start.bat run can take a while. The actual Android build has not been executed on your Windows machine yet; use the log output to diagnose any environment-specific issue.
