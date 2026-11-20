@@ -40,8 +40,11 @@
     "@react-native/typescript-config": "0.83.0",
     "@types/react": "19.2.0",
     "patch-package": "8.0.1",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "react-native-builder-bob": "0.40.17"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "packageManager": "yarn@4.11.0"
 }
