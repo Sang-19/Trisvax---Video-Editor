@@ -3,9 +3,10 @@ FROM node:22-bookworm
 ENV DEBIAN_FRONTEND=noninteractive \
     ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
-    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
+    GRADLE_HOME=/opt/gradle
 
-ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/36.0.0"
+ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/36.0.0:${GRADLE_HOME}/bin"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -27,6 +28,11 @@ RUN sdkmanager \
     "build-tools;36.0.0" \
     "ndk;27.1.12297006" \
     "cmake;3.22.1"
+
+RUN curl -fSL https://services.gradle.org/distributions/gradle-9.0.0-bin.zip -o /tmp/gradle.zip \
+    && unzip -q /tmp/gradle.zip -d /opt \
+    && mv /opt/gradle-9.0.0 "${GRADLE_HOME}" \
+    && rm /tmp/gradle.zip
 
 RUN corepack enable
 
