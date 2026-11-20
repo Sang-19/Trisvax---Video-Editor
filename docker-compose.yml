@@ -1,0 +1,25 @@
+services:
+  trisvax-video-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trisvax-video-editor-dev
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+      - gradle_cache:/root/.gradle
+      - android_sdk:/opt/android-sdk
+    ports:
+      - "8081:8081"
+    environment:
+      ANDROID_HOME: /opt/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+    tty: true
+    stdin_open: true
+    command: sleep infinity
+volumes:
+  node_modules:
+  gradle_cache:
+  android_sdk
