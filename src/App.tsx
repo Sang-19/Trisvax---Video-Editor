@@ -76,11 +76,13 @@ function AppContent() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [busy, setBusy] = useState(false);
 
-  const openPicker = useCallback(async (mediaKind: MediaKind) => {
+  const openPicker = useCallback(async (mediaKind: MediaKind, append = false) => {
     setKind(mediaKind);
-    setAssets([]);
-    setActiveIndex(0);
-    setScreen('picker');
+    if (!append) {
+      setAssets([]);
+      setActiveIndex(0);
+      setScreen('picker');
+    }
     try {
       setBusy(true);
       const result = await pick({
@@ -95,8 +97,8 @@ function AppContent() {
         size: item.size,
       }));
       if (chosen.length) {
-        setAssets(chosen);
-        setActiveIndex(0);
+        setAssets(current => append ? [...current, ...chosen] : chosen);
+        if (!append) setActiveIndex(0);
         setScreen('preview');
       }
     } catch (error) {
@@ -247,7 +249,7 @@ function AppContent() {
             <Text style={styles.centerDescription}>
               {busy ? 'Select one or more files in the Android picker.' : 'Use the button below to open the Android media picker.'}
             </Text>
-            {!busy && <ActionButton label={'OPEN ' + kind.toUpperCase() + ' PICKER'} onPress={() => openPicker(kind)} />}
+            {!busy && <ActionButton label={'OPEN ' + kind.toUpperCase() + ' PICKER'} onPress={() => openPicker(kind, true)} />}
             <Text style={styles.centerFootnote}>MULTI-SELECTION ENABLED</Text>
           </View>
         </>
