@@ -207,3 +207,14 @@ For each stage, report:
 - Acceptance checklist status.
 
 Do not claim a fix or feature is complete without evidence.
+
+
+## PR #3 scope update — video-only app
+
+The follow-up branch `remove-photo-editing` removes the Photo Workspace from the app:
+- Removed the Photo Workspace home card and photo picker option.
+- Removed photo-specific preview rendering and photo-only messaging.
+- The Android picker now requests videos only, with multi-selection.
+- The app is positioned as a video editor; photo editing is out of scope.
+
+The existing video SDK limitation remains: each editor session accepts one source video. Selecting multiple videos supports review and opening clips individually; it does not combine them into one timeline.
