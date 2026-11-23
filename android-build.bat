@@ -19,7 +19,7 @@ if errorlevel 1 (
  exit /b 1
 )
 echo [CHECK] Build ARM64 debug APK inside Docker
-docker compose exec -T trisvax-video-editor bash -lc "cd android && gradle assembleDebug --no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a"
+docker compose exec -T trisvax-video-editor bash -lc "cd android && /opt/gradle/bin/gradle assembleDebug --no-daemon --console=plain -PreactNativeArchitectures=arm64-v8a"
 if errorlevel 1 (
  echo [FAILED] APK build failed. Review Gradle output above.
  pause
