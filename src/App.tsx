@@ -1,32 +1,70 @@
 import React, { useCallback, useState } from 'react';
 import {
-  Alert, Image, Pressable, SafeAreaView, ScrollView, StatusBar,
-  StyleSheet, Text, View, ActivityIndicator,
+  ActivityIndicator, Alert, Image, Pressable, SafeAreaView, ScrollView,
+  StatusBar, StyleSheet, Text, View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { pick, types, errorCodes, isErrorWithCode } from '@react-native-documents/picker';
+import { errorCodes, isErrorWithCode, pick, types } from '@react-native-documents/picker';
 import { openVideoEditor, VideoEditorHost } from '@zlucksolutions/react-native-video-editor';
 
 type MediaKind = 'video' | 'photo';
-type Screen = 'home' | 'select' | 'photo-editor';
+type Screen = 'home' | 'picker' | 'preview';
 type Asset = { uri: string; name?: string | null; type?: string | null; size?: number | null };
 
 const C = {
-  bg: '#0B0D0B', panel: '#151915', panel2: '#1D231D', line: '#293129',
-  lime: '#C9F36A', white: '#F4F6EF', muted: '#929B8D', dim: '#667064',
-  orange: '#F6A66B',
+  bg: '#0B0807',
+  card: '#18110D',
+  card2: '#221711',
+  accent: '#FF5500',
+  accentSoft: '#FF8232',
+  text: '#FFFFFF',
+  secondary: '#9AA69B',
+  muted: '#667568',
+  border: '#2B352D',
+  blue: '#82B8FF',
+  danger: '#FF5A5A',
 };
 
-function Button({ title, onPress, secondary = false, disabled = false }: {
-  title: string; onPress: () => void; secondary?: boolean; disabled?: boolean;
+function ActionButton({ label, onPress, secondary = false, disabled = false }: {
+  label: string; onPress: () => void; secondary?: boolean; disabled?: boolean;
 }) {
   return (
-    <Pressable disabled={disabled} onPress={onPress}
-      style={({ pressed }) => [styles.button, secondary && styles.buttonSecondary,
-        disabled && { opacity: 0.45 }, pressed && { opacity: 0.75, transform: [{ scale: 0.985 }] }]}>
-      <Text style={[styles.buttonText, secondary && styles.buttonTextSecondary]}>{title}</Text>
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.actionButton,
+        secondary && styles.actionButtonSecondary,
+        disabled && styles.disabled,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={[styles.actionButtonText, secondary && styles.actionButtonTextSecondary]}>{label}</Text>
     </Pressable>
+  );
+}
+
+function BrandHeader({ onBack, rightLabel }: { onBack?: () => void; rightLabel?: string }) {
+  return (
+    <View style={styles.header}>
+      {onBack ? (
+        <Pressable onPress={onBack} hitSlop={12} style={styles.backButton}>
+          <Text style={styles.backText}>‹</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.brandMark}><Text style={styles.brandMarkText}>T</Text></View>
+      )}
+      <View style={styles.brandCopy}>
+        <Text style={styles.brandName}>TRISVAX</Text>
+        <Text style={styles.brandSub}>VIDEO STUDIO</Text>
+      </View>
+      <View style={styles.headerRight}>
+        <View style={styles.statusDot} />
+        <Text style={styles.headerRightText}>{rightLabel || 'STUDIO'}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -34,35 +72,49 @@ function AppContent() {
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
   const [kind, setKind] = useState<MediaKind>('video');
-  const [asset, setAsset] = useState<Asset | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [selectedTool, setSelectedTool] = useState('Adjust');
 
-  const chooseMedia = useCallback(async (mediaKind: MediaKind) => {
+  const openPicker = useCallback(async (mediaKind: MediaKind, append = false) => {
     setKind(mediaKind);
+    if (!append) {
+      setAssets([]);
+      setActiveIndex(0);
+      setScreen('picker');
+    }
     try {
       setBusy(true);
       const result = await pick({
         type: [mediaKind === 'video' ? types.video : types.images],
         mode: 'open',
-        allowMultiSelection: false,
+        allowMultiSelection: true,
       });
-      const selected = result?.[0];
-      if (selected?.uri) {
-        setAsset({ uri: selected.uri, name: selected.name, type: selected.type, size: selected.size });
+      const chosen = (result || []).filter(item => Boolean(item.uri)).map(item => ({
+        uri: item.uri,
+        name: item.name,
+        type: item.type,
+        size: item.size,
+      }));
+      if (chosen.length) {
+        setAssets(current => append ? [...current, ...chosen] : chosen);
+        if (!append) setActiveIndex(0);
+        setScreen('preview');
       }
     } catch (error) {
       if (isErrorWithCode(error) && error.code === errorCodes.OPERATION_CANCELED) return;
-      Alert.alert('Unable to select media', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not open media', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setBusy(false);
     }
   }, []);
 
-  const startEditing = useCallback(async () => {
-    if (!asset) return;
+  const launchEditor = useCallback(async (asset: Asset) => {
     if (kind === 'photo') {
-      setScreen('photo-editor');
+      Alert.alert(
+        'Photo workspace',
+        'The installed native SDK (1.0.7) is a video editor and does not expose photo-editing APIs yet. Your photo is selected, but photo editing is not enabled.',
+      );
       return;
     }
     try {
@@ -77,7 +129,7 @@ function AppContent() {
         isGesture: true,
       });
       if (result.success && result.exportedUri) {
-        Alert.alert('Export complete', 'Your edited video is ready:\n' + result.exportedUri);
+        Alert.alert('Export complete', 'Your edited video is ready:\\n' + result.exportedUri);
       } else if (result.error) {
         Alert.alert('Editor closed', result.error);
       }
@@ -86,186 +138,316 @@ function AppContent() {
     } finally {
       setBusy(false);
     }
-  }, [asset, kind]);
+  }, [kind]);
 
-  const reset = () => {
-    setAsset(null);
-    setScreen('select');
+  const removeAsset = (index: number) => {
+    setAssets(current => current.filter((_, i) => i !== index));
+    setActiveIndex(current => {
+      if (index < current) return current - 1;
+      if (index === current) return Math.max(0, current - 1);
+      return current;
+    });
   };
 
-  const topBar = (back = false) => (
-    <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 10) }]}>
-      {back ? <Pressable onPress={() => setScreen(screen === 'photo-editor' ? 'select' : 'home')}><Text style={styles.back}>‹</Text></Pressable>
-        : <View style={styles.logoMark}><Text style={styles.logoMarkText}>T</Text></View>}
-      <Text style={styles.brand}>TRISVAX <Text style={styles.brandThin}>STUDIO</Text></Text>
-      <View style={styles.topTag}><View style={styles.dot} /><Text style={styles.topTagText}>BETA</Text></View>
-    </View>
-  );
+  const moveAsset = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= assets.length) return;
+    setAssets(current => {
+      const next = [...current];
+      const temp = next[index];
+      next[index] = next[target];
+      next[target] = temp;
+      return next;
+    });
+    setActiveIndex(target);
+  };
+
+  const goHome = () => {
+    setAssets([]);
+    setActiveIndex(0);
+    setScreen('home');
+  };
+
+  const activeAsset = assets[activeIndex];
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { paddingTop: Math.max(insets.top, 0) }]}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      {screen === 'home' && <>
-        {topBar()}
-        <ScrollView contentContainerStyle={styles.homeContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.eyebrow}><Text style={styles.eyebrowText}>YOUR CREATIVE SPACE</Text></View>
-          <Text style={styles.hero}>Make it{ '\n' }<Text style={styles.heroAccent}>move.</Text></Text>
-          <Text style={styles.subhead}>A simple studio for your moments. Pick a clip, shape the story, make it yours.</Text>
-          <View style={styles.artCard}>
-            <View style={styles.artTop}><Text style={styles.artLabel}>CREATE / 001</Text><Text style={styles.artLabel}>TRISVAX EDITION</Text></View>
-            <View style={styles.artVisual}>
-              <View style={styles.artRing}><View style={styles.artInner}><Text style={styles.playIcon}>▶</Text></View></View>
-              <View style={styles.artCaption}><Text style={styles.artCaptionSmall}>EVERY FRAME</Text><Text style={styles.artCaptionBig}>HAS A FEELING.</Text></View>
+      {screen === 'home' && (
+        <>
+          <BrandHeader />
+          <ScrollView contentContainerStyle={styles.homeScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.heroEyebrow}>
+              <View style={styles.heroEyebrowLine} />
+              <Text style={styles.eyebrowText}>CREATE WITHOUT LIMITS</Text>
             </View>
-            <View style={styles.artBottom}><Text style={styles.artLabel}>VIDEO · PHOTO · STORY</Text><Text style={styles.artArrow}>↗</Text></View>
-          </View>
-          <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Start creating</Text><Text style={styles.sectionHint}>01 — 02</Text></View>
-          <Button title="Open your studio   →" onPress={() => { setAsset(null); setScreen('select'); }} />
-          <Text style={styles.footnote}>No account. No uploads. Your media stays on your device.</Text>
-        </ScrollView>
-      </>}
+            <Text style={styles.heroTitle}>Your story.{'\n'}<Text style={styles.heroAccent}>Your cut.</Text></Text>
+            <Text style={styles.heroDescription}>
+              A focused editing space for the moments worth keeping. Choose your media and start creating.
+            </Text>
 
-      {screen === 'select' && <>
-        {topBar(true)}
-        <ScrollView contentContainerStyle={styles.selectContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.step}>STEP 01 / MEDIA</Text>
-          <Text style={styles.pageTitle}>Choose your{ '\n' }<Text style={styles.heroAccent}>素材.</Text></Text>
-          <Text style={styles.subhead}>Select a video or photo from your device. Your gallery opens only when you choose a media type.</Text>
-          <View style={styles.mediaOptions}>
-            <Pressable onPress={() => chooseMedia('video')} style={styles.mediaCard}>
-              <View style={styles.mediaIcon}><Text style={styles.mediaEmoji}>▶</Text></View>
-              <View style={styles.mediaText}><Text style={styles.mediaTitle}>Video</Text><Text style={styles.mediaDesc}>Trim · Crop · Music · Text · Voice</Text></View>
-              <Text style={styles.chevron}>↗</Text>
-            </Pressable>
-            <Pressable onPress={() => chooseMedia('photo')} style={styles.mediaCard}>
-              <View style={[styles.mediaIcon, { backgroundColor: '#34291E' }]}><Text style={styles.mediaEmoji}>▧</Text></View>
-              <View style={styles.mediaText}><Text style={styles.mediaTitle}>Photo</Text><Text style={styles.mediaDesc}>Preview · Adjust · Crop · Text</Text></View>
-              <Text style={styles.chevron}>↗</Text>
-            </Pressable>
-          </View>
-          {busy && <View style={styles.loading}><ActivityIndicator color={C.lime} /><Text style={styles.loadingText}>Opening your media library…</Text></View>}
-          {asset && <View style={styles.selectedCard}>
-            <Text style={styles.selectedLabel}>SELECTED {kind.toUpperCase()}</Text>
-            {kind === 'photo' ? <Image source={{ uri: asset.uri }} style={styles.selectedImage} resizeMode="cover" /> :
-              <View style={styles.videoPlaceholder}><Text style={styles.videoPlaceholderIcon}>▶</Text><Text style={styles.videoPlaceholderText}>VIDEO READY</Text></View>}
-            <Text style={styles.assetName} numberOfLines={1}>{asset.name || (kind === 'video' ? 'Selected video' : 'Selected photo')}</Text>
-            <Text style={styles.assetMeta}>{asset.type || 'Media file'}{asset.size ? '  ·  ' + (asset.size / 1048576).toFixed(1) + ' MB' : ''}</Text>
-            <Button title={kind === 'video' ? 'Continue to video editor  →' : 'Continue to photo workspace  →'} onPress={startEditing} disabled={busy} />
-            <Pressable onPress={() => chooseMedia(kind)} style={styles.changeButton}><Text style={styles.changeText}>Choose another file</Text></Pressable>
-          </View>}
-          <View style={styles.permissionNote}><Text style={styles.permissionIcon}>⌁</Text><Text style={styles.permissionText}>Android’s system picker gives access only to the file you select. No broad gallery permission is needed. Microphone access is requested by the editor only when you use voice-over.</Text></View>
-        </ScrollView>
-      </>}
+            <View style={styles.featureCard}>
+              <View style={styles.featureCardTop}>
+                <Text style={styles.featureOverline}>TRISVAX ORIGINALS</Text>
+                <Text style={styles.featureNumber}>01 / 02</Text>
+              </View>
+              <View style={styles.featureArtwork}>
+                <View style={styles.artCircleOuter}>
+                  <View style={styles.artCircleInner}>
+                    <Text style={styles.artPlay}>▶</Text>
+                  </View>
+                </View>
+                <View style={styles.artSideText}>
+                  <Text style={styles.artSideSmall}>MAKE EVERY</Text>
+                  <Text style={styles.artSideLarge}>FRAME</Text>
+                  <Text style={styles.artSideLarge}>MATTER.</Text>
+                </View>
+              </View>
+              <View style={styles.featureCardBottom}>
+                <Text style={styles.featureOverline}>CAPTURE  /  CREATE  /  SHARE</Text>
+                <View style={styles.featureArrow}><Text style={styles.featureArrowText}>↗</Text></View>
+              </View>
+            </View>
 
-      {screen === 'photo-editor' && asset && <>
-        {topBar(true)}
-        <ScrollView contentContainerStyle={styles.photoContent}>
-          <Text style={styles.step}>STEP 02 / PHOTO WORKSPACE</Text>
-          <View style={styles.photoHeader}><View><Text style={styles.pageTitleSmall}>Your frame.</Text><Text style={styles.subheadSmall}>A first look at your photo tools.</Text></View><Text style={styles.previewTag}>PREVIEW</Text></View>
-          <Image source={{ uri: asset.uri }} style={styles.photoPreview} resizeMode="contain" />
-          <View style={styles.toolHeader}><Text style={styles.sectionTitle}>TOOLS</Text><Text style={styles.sectionHint}>PHOTO DEMO</Text></View>
-          <View style={styles.toolGrid}>
-            {['Adjust', 'Crop', 'Filters', 'Text'].map((tool) => (
-              <Pressable key={tool} onPress={() => setSelectedTool(tool)} style={[styles.tool, selectedTool === tool && styles.toolActive]}>
-                <Text style={[styles.toolName, selectedTool === tool && styles.toolNameActive]}>{tool}</Text>
+            <View style={styles.sectionHeading}>
+              <Text style={styles.sectionTitle}>Choose your workspace</Text>
+              <Text style={styles.sectionMeta}>SELECT MEDIA</Text>
+            </View>
+
+            <Pressable onPress={() => openPicker('video')} style={({ pressed }) => [styles.workspaceCard, pressed && styles.pressed]}>
+              <View style={styles.workspaceIconVideo}><Text style={styles.workspaceIconText}>▶</Text></View>
+              <View style={styles.workspaceCopy}>
+                <Text style={styles.workspaceTitle}>Video studio</Text>
+                <Text style={styles.workspaceDescription}>Trim · Crop · Music · Text · Voice-over</Text>
+              </View>
+              <Text style={styles.workspaceArrow}>↗</Text>
+            </Pressable>
+
+            <Pressable onPress={() => openPicker('photo')} style={({ pressed }) => [styles.workspaceCard, pressed && styles.pressed]}>
+              <View style={styles.workspaceIconPhoto}><Text style={styles.workspaceIconText}>▧</Text></View>
+              <View style={styles.workspaceCopy}>
+                <Text style={styles.workspaceTitle}>Photo workspace</Text>
+                <Text style={styles.workspaceDescription}>Select and preview photos</Text>
+              </View>
+              <Text style={styles.workspaceArrow}>↗</Text>
+            </Pressable>
+
+            <View style={styles.privacyRow}>
+              <Text style={styles.privacyIcon}>◈</Text>
+              <Text style={styles.privacyText}>Your media stays on your device. No account or cloud upload.</Text>
+            </View>
+          </ScrollView>
+        </>
+      )}
+
+      {screen === 'picker' && (
+        <>
+          <BrandHeader onBack={goHome} rightLabel="MEDIA" />
+          <View style={styles.centerState}>
+            {busy ? <ActivityIndicator size="large" color={C.accent} /> : <Text style={styles.emptyIcon}>▧</Text>}
+            <Text style={styles.centerTitle}>{busy ? 'Opening your library' : 'Choose from your device'}</Text>
+            <Text style={styles.centerDescription}>
+              {busy ? 'Select one or more files in the Android picker.' : 'Use the button below to open the Android media picker.'}
+            </Text>
+            {!busy && <ActionButton label={'OPEN ' + kind.toUpperCase() + ' PICKER'} onPress={() => openPicker(kind, true)} />}
+            <Text style={styles.centerFootnote}>MULTI-SELECTION ENABLED</Text>
+          </View>
+        </>
+      )}
+
+      {screen === 'preview' && (
+        <>
+          <BrandHeader onBack={() => setScreen('home')} rightLabel="PREVIEW" />
+          <ScrollView contentContainerStyle={styles.previewScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.previewHeadingRow}>
+              <View>
+                <Text style={styles.eyebrowText}>STEP 02  /  YOUR MEDIA</Text>
+                <Text style={styles.previewTitle}>Review your{'\n'}<Text style={styles.heroAccent}>selection.</Text></Text>
+              </View>
+              <View style={styles.countPill}><Text style={styles.countText}>{assets.length} SELECTED</Text></View>
+            </View>
+
+            {activeAsset && (
+              <View style={styles.mainPreview}>
+                {kind === 'photo' ? (
+                  <Image source={{ uri: activeAsset.uri }} style={styles.mainPreviewImage} resizeMode="contain" />
+                ) : (
+                  <View style={styles.videoPreviewPlaceholder}>
+                    <View style={styles.previewPlayCircle}><Text style={styles.previewPlayText}>▶</Text></View>
+                    <Text style={styles.videoPreviewLabel}>VIDEO SELECTED</Text>
+                  </View>
+                )}
+                <View style={styles.mainPreviewFooter}>
+                  <Text style={styles.mainPreviewName} numberOfLines={1}>{activeAsset.name || (kind === 'video' ? 'Selected video' : 'Selected photo')}</Text>
+                  <Text style={styles.mainPreviewMeta}>{activeAsset.type || kind.toUpperCase()}{activeAsset.size ? '  ·  ' + (activeAsset.size / 1048576).toFixed(1) + ' MB' : ''}</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.sectionHeading}>
+              <Text style={styles.sectionTitle}>Selected files</Text>
+              <Text style={styles.sectionMeta}>TAP TO PREVIEW</Text>
+            </View>
+
+            {assets.map((item, index) => (
+              <Pressable key={item.uri + index} onPress={() => setActiveIndex(index)} style={[styles.assetRow, activeIndex === index && styles.assetRowActive]}>
+                <View style={styles.assetIndex}><Text style={styles.assetIndexText}>{String(index + 1).padStart(2, '0')}</Text></View>
+                <View style={styles.assetInfo}>
+                  <Text style={styles.assetName} numberOfLines={1}>{item.name || (kind === 'video' ? 'Video file' : 'Photo file')}</Text>
+                  <Text style={styles.assetSub}>{item.type || kind.toUpperCase()}{item.size ? ' · ' + (item.size / 1048576).toFixed(1) + ' MB' : ''}</Text>
+                </View>
+                <View style={styles.assetActions}>
+                  <Pressable hitSlop={8} onPress={() => moveAsset(index, -1)} style={styles.miniAction}><Text style={styles.miniActionText}>↑</Text></Pressable>
+                  <Pressable hitSlop={8} onPress={() => moveAsset(index, 1)} style={styles.miniAction}><Text style={styles.miniActionText}>↓</Text></Pressable>
+                  <Pressable hitSlop={8} onPress={() => removeAsset(index)} style={styles.miniAction}><Text style={styles.removeActionText}>×</Text></Pressable>
+                </View>
               </Pressable>
             ))}
-          </View>
-          <View style={styles.demoNotice}><Text style={styles.demoNoticeTitle}>Photo workspace preview</Text><Text style={styles.demoNoticeText}>The connected native SDK currently edits videos. This screen is a UI demo for photo editing; photo filters and export are not wired up yet.</Text></View>
-          <Button title="Choose another media file" secondary onPress={reset} />
-        </ScrollView>
-      </>}
 
-      <View style={styles.bottomNote}><Text style={styles.bottomNoteText}>TRISVAX STUDIO  ·  MADE FOR CREATORS</Text></View>
+            <ActionButton label="ADD MORE MEDIA" secondary onPress={() => openPicker(kind)} />
+            {kind === 'video' && assets.length > 1 && (
+              <View style={styles.noticeCard}>
+                <Text style={styles.noticeTitle}>Multiple clips selected</Text>
+                <Text style={styles.noticeText}>
+                  The installed SDK 1.0.7 accepts one source video per editing session. You can open each clip individually; combining clips into one timeline needs additional editing-engine support.
+                </Text>
+              </View>
+            )}
+            {kind === 'photo' && (
+              <View style={styles.noticeCard}>
+                <Text style={styles.noticeTitle}>Photo preview</Text>
+                <Text style={styles.noticeText}>
+                  The installed SDK provides video editing, not photo-editing APIs. Photo editing and export are not presented as working features yet.
+                </Text>
+              </View>
+            )}
+            {activeAsset && (
+              <ActionButton
+                label={kind === 'video' ? 'EDIT THIS VIDEO  →' : 'PHOTO SELECTED'}
+                onPress={() => launchEditor(activeAsset)}
+                disabled={busy || kind === 'photo'}
+              />
+            )}
+            <Text style={[styles.centerFootnote, { marginTop: 18, marginBottom: 12 }]}>LOCAL MEDIA  ·  PRIVATE BY DESIGN</Text>
+          </ScrollView>
+        </>
+      )}
+
+      {busy && screen !== 'picker' && (
+        <View style={styles.busyOverlay}>
+          <ActivityIndicator color={C.accent} size="large" />
+          <Text style={styles.busyText}>Opening editor…</Text>
+        </View>
+      )}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <Text style={styles.bottomBarText}>TRISVAX  /  VIDEO STUDIO</Text>
+        <View style={styles.bottomBarStatus}><View style={styles.statusDot} /><Text style={styles.bottomBarStatusText}>LOCAL SESSION</Text></View>
+      </View>
       <VideoEditorHost />
     </SafeAreaView>
   );
 }
 
 export default function App() {
-  return <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.bg }}>
-    <SafeAreaProvider><AppContent /></SafeAreaProvider>
-  </GestureHandlerRootView>;
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider><AppContent /></SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
   safe: { flex: 1, backgroundColor: C.bg },
-  topBar: { minHeight: 58, paddingHorizontal: 22, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  logoMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: C.lime, alignItems: 'center', justifyContent: 'center' },
-  logoMarkText: { color: C.bg, fontWeight: '900', fontSize: 18 },
-  brand: { color: C.white, fontSize: 12, fontWeight: '900', letterSpacing: 2, flex: 1 },
-  brandThin: { color: C.muted, fontWeight: '500' },
-  topTag: { borderWidth: 1, borderColor: C.line, borderRadius: 30, paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 4, backgroundColor: C.lime },
-  topTagText: { color: C.muted, fontSize: 9, letterSpacing: 1.4, fontWeight: '800' },
-  back: { color: C.white, fontSize: 34, width: 30, lineHeight: 36 },
-  homeContent: { paddingHorizontal: 22, paddingTop: 26, paddingBottom: 28 },
-  eyebrow: { alignSelf: 'flex-start', borderWidth: 1, borderColor: C.line, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 5 },
-  eyebrowText: { color: C.lime, fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
-  hero: { color: C.white, fontSize: 62, lineHeight: 64, fontWeight: '900', letterSpacing: -2.5, marginTop: 22 },
-  heroAccent: { color: C.lime },
-  subhead: { color: C.muted, fontSize: 14, lineHeight: 22, marginTop: 14, maxWidth: 320 },
-  artCard: { marginTop: 28, height: 238, backgroundColor: '#20291D', borderRadius: 18, padding: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#34402D' },
-  artTop: { flexDirection: 'row', justifyContent: 'space-between' },
-  artLabel: { color: '#AAB79A', fontSize: 8, fontWeight: '800', letterSpacing: 1.3 },
-  artVisual: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  artRing: { width: 126, height: 126, borderRadius: 70, borderWidth: 1, borderColor: '#82966A', alignItems: 'center', justifyContent: 'center' },
-  artInner: { width: 94, height: 94, borderRadius: 50, backgroundColor: C.lime, alignItems: 'center', justifyContent: 'center' },
-  playIcon: { color: '#172014', fontSize: 28, marginLeft: 4 },
-  artCaption: { position: 'absolute', bottom: 2, right: 0, alignItems: 'flex-end' },
-  artCaptionSmall: { color: '#AAB79A', fontSize: 8, letterSpacing: 2, fontWeight: '800' },
-  artCaptionBig: { color: C.white, fontSize: 16, fontWeight: '900', letterSpacing: 1.1 },
-  artBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  artArrow: { color: C.lime, fontSize: 18 },
-  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 30, marginBottom: 14 },
-  sectionTitle: { color: C.white, fontSize: 16, fontWeight: '800' },
-  sectionHint: { color: C.dim, fontSize: 10, letterSpacing: 1.2, fontWeight: '800' },
-  button: { height: 54, borderRadius: 12, backgroundColor: C.lime, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  buttonSecondary: { backgroundColor: C.panel, borderWidth: 1, borderColor: C.line },
-  buttonText: { color: '#151A11', fontSize: 14, fontWeight: '900', letterSpacing: 0.2 },
-  buttonTextSecondary: { color: C.white },
-  footnote: { color: C.dim, textAlign: 'center', fontSize: 10, marginTop: 16 },
-  selectContent: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 26 },
-  step: { color: C.lime, fontSize: 10, letterSpacing: 2, fontWeight: '900' },
-  pageTitle: { color: C.white, fontSize: 43, lineHeight: 47, fontWeight: '900', letterSpacing: -1.6, marginTop: 15 },
-  mediaOptions: { gap: 12, marginTop: 30 },
-  mediaCard: { minHeight: 92, backgroundColor: C.panel, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  mediaIcon: { width: 52, height: 52, borderRadius: 13, backgroundColor: '#29351E', alignItems: 'center', justifyContent: 'center' },
-  mediaEmoji: { color: C.lime, fontSize: 22, fontWeight: '900' },
-  mediaText: { flex: 1 },
-  mediaTitle: { color: C.white, fontSize: 17, fontWeight: '800' },
-  mediaDesc: { color: C.muted, fontSize: 11, marginTop: 5 },
-  chevron: { color: C.lime, fontSize: 20 },
-  loading: { flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 20 },
-  loadingText: { color: C.muted, fontSize: 12 },
-  selectedCard: { marginTop: 22, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#3C4B2E', backgroundColor: '#151D12' },
-  selectedLabel: { color: C.lime, fontSize: 9, fontWeight: '900', letterSpacing: 1.6, marginBottom: 12 },
-  selectedImage: { width: '100%', height: 190, borderRadius: 10, backgroundColor: C.panel2 },
-  videoPlaceholder: { height: 112, borderRadius: 10, backgroundColor: '#222D1D', alignItems: 'center', justifyContent: 'center' },
-  videoPlaceholderIcon: { color: C.lime, fontSize: 28 },
-  videoPlaceholderText: { color: C.muted, fontSize: 9, letterSpacing: 1.5, marginTop: 6, fontWeight: '800' },
-  assetName: { color: C.white, fontSize: 14, fontWeight: '800', marginTop: 13 },
-  assetMeta: { color: C.muted, fontSize: 10, marginTop: 5, marginBottom: 12 },
-  changeButton: { alignItems: 'center', paddingVertical: 12 },
-  changeText: { color: C.lime, fontSize: 12, fontWeight: '700' },
-  permissionNote: { flexDirection: 'row', gap: 10, backgroundColor: C.panel, borderRadius: 12, padding: 14, marginTop: 24 },
-  permissionIcon: { color: C.lime, fontSize: 20 },
-  permissionText: { color: C.muted, fontSize: 10, lineHeight: 16, flex: 1 },
-  photoContent: { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 32 },
-  photoHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-  pageTitleSmall: { color: C.white, fontSize: 30, fontWeight: '900' },
-  subheadSmall: { color: C.muted, fontSize: 12, marginTop: 5 },
-  previewTag: { color: C.lime, fontSize: 9, letterSpacing: 1.5, borderWidth: 1, borderColor: C.line, padding: 8, borderRadius: 6 },
-  photoPreview: { width: '100%', height: 330, marginTop: 20, backgroundColor: C.panel, borderRadius: 16 },
-  toolHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 25, marginBottom: 12 },
-  toolGrid: { flexDirection: 'row', gap: 8 },
-  tool: { flex: 1, backgroundColor: C.panel, borderColor: C.line, borderWidth: 1, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  toolActive: { backgroundColor: '#28351D', borderColor: C.lime },
-  toolName: { color: C.muted, fontSize: 11, fontWeight: '700' },
-  toolNameActive: { color: C.lime },
-  demoNotice: { backgroundColor: '#211C14', borderWidth: 1, borderColor: '#493923', padding: 14, borderRadius: 12, marginTop: 18, marginBottom: 14 },
-  demoNoticeTitle: { color: C.orange, fontSize: 12, fontWeight: '900' },
-  demoNoticeText: { color: '#B6A58F', fontSize: 10, lineHeight: 16, marginTop: 6 },
-  bottomNote: { paddingHorizontal: 22, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#1A201A', alignItems: 'center' },
-  bottomNoteText: { color: C.dim, fontSize: 8, letterSpacing: 1.7, fontWeight: '800' },
+  header: { minHeight: 64, paddingHorizontal: 22, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#211811' },
+  brandMark: { width: 34, height: 34, borderRadius: 11, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  brandMarkText: { color: C.text, fontSize: 21, fontWeight: '900' },
+  brandCopy: { marginLeft: 10, flex: 1 },
+  brandName: { color: C.text, fontSize: 13, fontWeight: '900', letterSpacing: 2.4 },
+  brandSub: { color: C.muted, fontSize: 8, fontWeight: '800', letterSpacing: 2, marginTop: 3 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: C.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7 },
+  headerRightText: { color: C.secondary, fontSize: 8, fontWeight: '800', letterSpacing: 1.3 },
+  statusDot: { width: 6, height: 6, borderRadius: 4, backgroundColor: C.accent },
+  backButton: { width: 34, height: 34, alignItems: 'flex-start', justifyContent: 'center' },
+  backText: { color: C.text, fontSize: 34, lineHeight: 36 },
+  homeScroll: { paddingHorizontal: 22, paddingTop: 25, paddingBottom: 28 },
+  heroEyebrow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  heroEyebrowLine: { width: 22, height: 2, backgroundColor: C.accent },
+  eyebrowText: { color: C.accentSoft, fontSize: 9, fontWeight: '900', letterSpacing: 1.9 },
+  heroTitle: { color: C.text, fontSize: 51, lineHeight: 54, fontWeight: '900', letterSpacing: -2, marginTop: 18 },
+  heroAccent: { color: C.accent },
+  heroDescription: { color: C.secondary, fontSize: 13, lineHeight: 21, marginTop: 12, maxWidth: 310 },
+  featureCard: { height: 224, backgroundColor: C.card2, borderRadius: 17, borderWidth: 1, borderColor: '#3A2418', padding: 15, marginTop: 25, overflow: 'hidden' },
+  featureCardTop: { flexDirection: 'row', justifyContent: 'space-between' },
+  featureOverline: { color: '#B58A70', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+  featureNumber: { color: C.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+  featureArtwork: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  artCircleOuter: { width: 126, height: 126, borderRadius: 70, borderWidth: 1, borderColor: '#A34A21', alignItems: 'center', justifyContent: 'center' },
+  artCircleInner: { width: 91, height: 91, borderRadius: 50, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  artPlay: { color: C.text, fontSize: 27, marginLeft: 4 },
+  artSideText: { marginLeft: 16 },
+  artSideSmall: { color: C.secondary, fontSize: 8, letterSpacing: 1.7, fontWeight: '800' },
+  artSideLarge: { color: C.text, fontSize: 18, lineHeight: 21, fontWeight: '900', letterSpacing: 1.1 },
+  featureCardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  featureArrow: { width: 25, height: 25, borderRadius: 8, backgroundColor: '#3A2115', alignItems: 'center', justifyContent: 'center' },
+  featureArrowText: { color: C.accentSoft, fontSize: 16 },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 27, marginBottom: 12 },
+  sectionTitle: { color: C.text, fontSize: 15, fontWeight: '800' },
+  sectionMeta: { color: C.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1.2 },
+  workspaceCard: { minHeight: 82, flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 13, marginBottom: 10 },
+  workspaceIconVideo: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#3B1D10', alignItems: 'center', justifyContent: 'center' },
+  workspaceIconPhoto: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#1C2A32', alignItems: 'center', justifyContent: 'center' },
+  workspaceIconText: { color: C.accentSoft, fontSize: 21, fontWeight: '900' },
+  workspaceCopy: { flex: 1, marginLeft: 13 },
+  workspaceTitle: { color: C.text, fontSize: 14, fontWeight: '800' },
+  workspaceDescription: { color: C.secondary, fontSize: 10, marginTop: 5 },
+  workspaceArrow: { color: C.accent, fontSize: 20, paddingHorizontal: 5 },
+  privacyRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 12, paddingHorizontal: 3 },
+  privacyIcon: { color: C.accentSoft, fontSize: 15 },
+  privacyText: { color: C.muted, fontSize: 9, flex: 1, lineHeight: 14 },
+  centerState: { flex: 1, paddingHorizontal: 30, alignItems: 'center', justifyContent: 'center' },
+  emptyIcon: { color: C.accent, fontSize: 45 },
+  centerTitle: { color: C.text, fontSize: 21, fontWeight: '900', marginTop: 18 },
+  centerDescription: { color: C.secondary, fontSize: 12, lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 20 },
+  centerFootnote: { color: C.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 18 },
+  actionButton: { minHeight: 51, borderRadius: 12, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, marginTop: 9 },
+  actionButtonSecondary: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  actionButtonText: { color: C.text, fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  actionButtonTextSecondary: { color: C.secondary },
+  disabled: { opacity: 0.4 },
+  pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
+  previewScroll: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 24 },
+  previewHeadingRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  previewTitle: { color: C.text, fontSize: 34, lineHeight: 37, fontWeight: '900', letterSpacing: -1.2, marginTop: 10 },
+  countPill: { borderWidth: 1, borderColor: '#71351D', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 4 },
+  countText: { color: C.accentSoft, fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  mainPreview: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 15, overflow: 'hidden', marginTop: 20 },
+  mainPreviewImage: { width: '100%', height: 220, backgroundColor: '#100D0B' },
+  videoPreviewPlaceholder: { height: 180, backgroundColor: '#21150F', alignItems: 'center', justifyContent: 'center' },
+  previewPlayCircle: { width: 56, height: 56, borderRadius: 30, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  previewPlayText: { color: C.text, fontSize: 19, marginLeft: 3 },
+  videoPreviewLabel: { color: C.secondary, fontSize: 8, fontWeight: '900', letterSpacing: 1.8, marginTop: 13 },
+  mainPreviewFooter: { paddingHorizontal: 13, paddingVertical: 11, borderTopWidth: 1, borderTopColor: C.border },
+  mainPreviewName: { color: C.text, fontSize: 12, fontWeight: '800' },
+  mainPreviewMeta: { color: C.muted, fontSize: 9, marginTop: 4 },
+  assetRow: { minHeight: 61, flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 11, paddingHorizontal: 10, marginBottom: 8 },
+  assetRowActive: { borderColor: C.accent, backgroundColor: '#24160F' },
+  assetIndex: { width: 31, height: 31, borderRadius: 9, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' },
+  assetIndexText: { color: C.accentSoft, fontSize: 9, fontWeight: '900' },
+  assetInfo: { flex: 1, marginLeft: 10 },
+  assetName: { color: C.text, fontSize: 11, fontWeight: '800' },
+  assetSub: { color: C.muted, fontSize: 8, marginTop: 4 },
+  assetActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  miniAction: { width: 26, height: 28, alignItems: 'center', justifyContent: 'center' },
+  miniActionText: { color: C.secondary, fontSize: 15, fontWeight: '700' },
+  removeActionText: { color: C.danger, fontSize: 19, fontWeight: '500' },
+  noticeCard: { backgroundColor: '#21170F', borderWidth: 1, borderColor: '#55301D', borderRadius: 12, padding: 13, marginTop: 13 },
+  noticeTitle: { color: C.accentSoft, fontSize: 11, fontWeight: '900' },
+  noticeText: { color: C.secondary, fontSize: 10, lineHeight: 16, marginTop: 6 },
+  busyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(11,8,7,0.82)', alignItems: 'center', justifyContent: 'center', zIndex: 5 },
+  busyText: { color: C.text, fontSize: 11, marginTop: 12 },
+  bottomBar: { minHeight: 34, borderTopWidth: 1, borderTopColor: '#211811', paddingHorizontal: 20, paddingTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bottomBarText: { color: C.muted, fontSize: 7, fontWeight: '900', letterSpacing: 1.5 },
+  bottomBarStatus: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  bottomBarStatusText: { color: C.muted, fontSize: 7, fontWeight: '800', letterSpacing: 1 },
 });

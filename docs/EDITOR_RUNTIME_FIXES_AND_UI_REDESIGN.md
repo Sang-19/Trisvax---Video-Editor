@@ -143,6 +143,20 @@ Do not expose a control as functional if it is only decorative. Clearly report u
 - Preserve working functionality and local-first media handling.
 - Do not add login, accounts, social feeds or media upload to a server.
 
+## Implementation update (2026-11-23)
+
+Implemented in `src/App.tsx` on `fix/editor-runtime-and-redesign`:
+- Replaced the previous green home screen with the dark TRISVAX palette (`#0B0807` background, `#18110D` cards, `#FF5500` accent) from the social-fitness repository.
+- Added Video Studio and Photo Workspace entry cards.
+- Added native Android picker flow with multi-selection for videos or photos.
+- Added selected-media preview/list, selection count, remove and reorder controls, and add-more-media flow.
+- Kept the SDK host mounted at the app root and retained the SDK-based single-video editor launch with trim, crop, BGM, text overlay and voice-over enabled.
+- Added explicit UI messaging for the SDK's single-source limitation and for photo editing being unsupported by the installed video SDK; these are not represented as completed editing features.
+
+Not implemented in this code change: custom in-app timeline/editor UI, multi-clip concatenation, native photo editing, custom audio library, transitions, filters, speed/volume controls, and 1080p export settings UI. The SDK README documents a single `source` URI and the listed video tools; it does not document a multi-clip timeline or photo editor API.
+
+Validation limitation: this change was committed through GitHub and has not yet been built or tested on the user's physical Android device. Run the repository typecheck and Android build before merging; retest the previously reported Worklets/VideoEditorHost runtime errors.
+
 ## Acceptance checklist
 
 - [ ] Fresh Android install launches without the AppCompat startup crash.
