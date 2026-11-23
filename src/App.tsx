@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, Pressable, SafeAreaView, ScrollView,
+  ActivityIndicator, Alert, Pressable, SafeAreaView, ScrollView,
   StatusBar, StyleSheet, Text, View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -8,7 +8,6 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { errorCodes, isErrorWithCode, pick, types } from '@react-native-documents/picker';
 import { openVideoEditor, VideoEditorHost } from '@zlucksolutions/react-native-video-editor';
 
-type MediaKind = 'video' | 'photo';
 type Screen = 'home' | 'picker' | 'preview';
 type Asset = { uri: string; name?: string | null; type?: string | null; size?: number | null };
 
@@ -71,13 +70,11 @@ function BrandHeader({ onBack, rightLabel }: { onBack?: () => void; rightLabel?:
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [screen, setScreen] = useState<Screen>('home');
-  const [kind, setKind] = useState<MediaKind>('video');
   const [assets, setAssets] = useState<Asset[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [busy, setBusy] = useState(false);
 
-  const openPicker = useCallback(async (mediaKind: MediaKind, append = false) => {
-    setKind(mediaKind);
+  const openPicker = useCallback(async (append = false) => {
     if (!append) {
       setAssets([]);
       setActiveIndex(0);
@@ -86,7 +83,7 @@ function AppContent() {
     try {
       setBusy(true);
       const result = await pick({
-        type: [mediaKind === 'video' ? types.video : types.images],
+        type: [types.video],
         mode: 'open',
         allowMultiSelection: true,
       });
@@ -110,13 +107,6 @@ function AppContent() {
   }, []);
 
   const launchEditor = useCallback(async (asset: Asset) => {
-    if (kind === 'photo') {
-      Alert.alert(
-        'Photo workspace',
-        'The installed native SDK (1.0.7) is a video editor and does not expose photo-editing APIs yet. Your photo is selected, but photo editing is not enabled.',
-      );
-      return;
-    }
     try {
       setBusy(true);
       const result = await openVideoEditor({
@@ -138,7 +128,7 @@ function AppContent() {
     } finally {
       setBusy(false);
     }
-  }, [kind]);
+  }, []);
 
   const removeAsset = (index: number) => {
     setAssets(current => current.filter((_, i) => i !== index));
@@ -189,7 +179,7 @@ function AppContent() {
             <View style={styles.featureCard}>
               <View style={styles.featureCardTop}>
                 <Text style={styles.featureOverline}>TRISVAX ORIGINALS</Text>
-                <Text style={styles.featureNumber}>01 / 02</Text>
+                <Text style={styles.featureNumber}>01 / 01</Text>
               </View>
               <View style={styles.featureArtwork}>
                 <View style={styles.artCircleOuter}>
@@ -210,11 +200,11 @@ function AppContent() {
             </View>
 
             <View style={styles.sectionHeading}>
-              <Text style={styles.sectionTitle}>Choose your workspace</Text>
+              <Text style={styles.sectionTitle}>Video editing</Text>
               <Text style={styles.sectionMeta}>SELECT MEDIA</Text>
             </View>
 
-            <Pressable onPress={() => openPicker('video')} style={({ pressed }) => [styles.workspaceCard, pressed && styles.pressed]}>
+            <Pressable onPress={() => openPicker()  style={({ pressed }) => [styles.workspaceCard, pressed && styles.pressed]}>
               <View style={styles.workspaceIconVideo}><Text style={styles.workspaceIconText}>▶</Text></View>
               <View style={styles.workspaceCopy}>
                 <Text style={styles.workspaceTitle}>Video studio</Text>
@@ -223,14 +213,6 @@ function AppContent() {
               <Text style={styles.workspaceArrow}>↗</Text>
             </Pressable>
 
-            <Pressable onPress={() => openPicker('photo')} style={({ pressed }) => [styles.workspaceCard, pressed && styles.pressed]}>
-              <View style={styles.workspaceIconPhoto}><Text style={styles.workspaceIconText}>▧</Text></View>
-              <View style={styles.workspaceCopy}>
-                <Text style={styles.workspaceTitle}>Photo workspace</Text>
-                <Text style={styles.workspaceDescription}>Select and preview photos</Text>
-              </View>
-              <Text style={styles.workspaceArrow}>↗</Text>
-            </Pressable>
 
             <View style={styles.privacyRow}>
               <Text style={styles.privacyIcon}>◈</Text>
@@ -249,8 +231,8 @@ function AppContent() {
             <Text style={styles.centerDescription}>
               {busy ? 'Select one or more files in the Android picker.' : 'Use the button below to open the Android media picker.'}
             </Text>
-            {!busy && <ActionButton label={'OPEN ' + kind.toUpperCase() + ' PICKER'} onPress={() => openPicker(kind, true)} />}
-            <Text style={styles.centerFootnote}>MULTI-SELECTION ENABLED</Text>
+            {!busy && <ActionButton label="OPEN VIDEO PICKER" onPress={() => openPicker(true)} />}
+            <Text style={styles.centerFootnote}>VIDEO MULTI-SELECTION ENABLED</Text>
           </View>
         </>
       )}
@@ -269,17 +251,13 @@ function AppContent() {
 
             {activeAsset && (
               <View style={styles.mainPreview}>
-                {kind === 'photo' ? (
-                  <Image source={{ uri: activeAsset.uri }} style={styles.mainPreviewImage} resizeMode="contain" />
-                ) : (
-                  <View style={styles.videoPreviewPlaceholder}>
-                    <View style={styles.previewPlayCircle}><Text style={styles.previewPlayText}>▶</Text></View>
-                    <Text style={styles.videoPreviewLabel}>VIDEO SELECTED</Text>
-                  </View>
-                )}
+                <View style={styles.videoPreviewPlaceholder}>
+                  <View style={styles.previewPlayCircle}><Text style={styles.previewPlayText}>▶</Text></View>
+                  <Text style={styles.videoPreviewLabel}>VIDEO SELECTED</Text>
+                </View>
                 <View style={styles.mainPreviewFooter}>
-                  <Text style={styles.mainPreviewName} numberOfLines={1}>{activeAsset.name || (kind === 'video' ? 'Selected video' : 'Selected photo')}</Text>
-                  <Text style={styles.mainPreviewMeta}>{activeAsset.type || kind.toUpperCase()}{activeAsset.size ? '  ·  ' + (activeAsset.size / 1048576).toFixed(1) + ' MB' : ''}</Text>
+                  <Text style={styles.mainPreviewName} numberOfLines={1}>{activeAsset.name || 'Selected video'}</Text>
+                  <Text style={styles.mainPreviewMeta}>{activeAsset.type || 'VIDEO'}{activeAsset.size ? '  ·  ' + (activeAsset.size / 1048576).toFixed(1) + ' MB' : ''}</Text>
                 </View>
               </View>
             )}
@@ -293,8 +271,8 @@ function AppContent() {
               <Pressable key={item.uri + index} onPress={() => setActiveIndex(index)} style={[styles.assetRow, activeIndex === index && styles.assetRowActive]}>
                 <View style={styles.assetIndex}><Text style={styles.assetIndexText}>{String(index + 1).padStart(2, '0')}</Text></View>
                 <View style={styles.assetInfo}>
-                  <Text style={styles.assetName} numberOfLines={1}>{item.name || (kind === 'video' ? 'Video file' : 'Photo file')}</Text>
-                  <Text style={styles.assetSub}>{item.type || kind.toUpperCase()}{item.size ? ' · ' + (item.size / 1048576).toFixed(1) + ' MB' : ''}</Text>
+                  <Text style={styles.assetName} numberOfLines={1}>{item.name || 'Video file'}</Text>
+                  <Text style={styles.assetSub}>{item.type || 'VIDEO'}{item.size ? ' · ' + (item.size / 1048576).toFixed(1) + ' MB' : ''}</Text>
                 </View>
                 <View style={styles.assetActions}>
                   <Pressable hitSlop={8} onPress={() => moveAsset(index, -1)} style={styles.miniAction}><Text style={styles.miniActionText}>↑</Text></Pressable>
@@ -304,8 +282,8 @@ function AppContent() {
               </Pressable>
             ))}
 
-            <ActionButton label="ADD MORE MEDIA" secondary onPress={() => openPicker(kind)} />
-            {kind === 'video' && assets.length > 1 && (
+            <ActionButton label="ADD MORE MEDIA" secondary onPress={() => openPicker(true)} />
+            {assets.length > 1 && (
               <View style={styles.noticeCard}>
                 <Text style={styles.noticeTitle}>Multiple clips selected</Text>
                 <Text style={styles.noticeText}>
@@ -313,19 +291,11 @@ function AppContent() {
                 </Text>
               </View>
             )}
-            {kind === 'photo' && (
-              <View style={styles.noticeCard}>
-                <Text style={styles.noticeTitle}>Photo preview</Text>
-                <Text style={styles.noticeText}>
-                  The installed SDK provides video editing, not photo-editing APIs. Photo editing and export are not presented as working features yet.
-                </Text>
-              </View>
-            )}
             {activeAsset && (
               <ActionButton
-                label={kind === 'video' ? 'EDIT THIS VIDEO  →' : 'PHOTO SELECTED'}
+                label="EDIT THIS VIDEO  →"
                 onPress={() => launchEditor(activeAsset)}
-                disabled={busy || kind === 'photo'}
+                disabled={busy}
               />
             )}
             <Text style={[styles.centerFootnote, { marginTop: 18, marginBottom: 12 }]}>LOCAL MEDIA  ·  PRIVATE BY DESIGN</Text>
@@ -396,7 +366,6 @@ const styles = StyleSheet.create({
   sectionMeta: { color: C.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1.2 },
   workspaceCard: { minHeight: 82, flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 13, marginBottom: 10 },
   workspaceIconVideo: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#3B1D10', alignItems: 'center', justifyContent: 'center' },
-  workspaceIconPhoto: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#1C2A32', alignItems: 'center', justifyContent: 'center' },
   workspaceIconText: { color: C.accentSoft, fontSize: 21, fontWeight: '900' },
   workspaceCopy: { flex: 1, marginLeft: 13 },
   workspaceTitle: { color: C.text, fontSize: 14, fontWeight: '800' },
@@ -422,7 +391,6 @@ const styles = StyleSheet.create({
   countPill: { borderWidth: 1, borderColor: '#71351D', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 4 },
   countText: { color: C.accentSoft, fontSize: 8, fontWeight: '900', letterSpacing: 1 },
   mainPreview: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 15, overflow: 'hidden', marginTop: 20 },
-  mainPreviewImage: { width: '100%', height: 220, backgroundColor: '#100D0B' },
   videoPreviewPlaceholder: { height: 180, backgroundColor: '#21150F', alignItems: 'center', justifyContent: 'center' },
   previewPlayCircle: { width: 56, height: 56, borderRadius: 30, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   previewPlayText: { color: C.text, fontSize: 19, marginLeft: 3 },
